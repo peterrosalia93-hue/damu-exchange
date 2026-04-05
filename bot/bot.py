@@ -28,8 +28,13 @@ LAST_UPDATE_ID = 0
 # ============================================
 # DATABASE
 # ============================================
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "damu.db")
+
+def get_db():
+    return sqlite3.connect(DB_PATH)
+
 def init_db():
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     
     c.execute("""CREATE TABLE IF NOT EXISTS donors (
@@ -111,7 +116,7 @@ def clear_state(chat_id):
 # HANDLERS
 # ============================================
 def handle_register(chat_id, name, phone, blood_type, location):
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""INSERT OR REPLACE INTO donors 
         (user_id, name, phone, blood_type, location, available, created_at)
@@ -122,7 +127,7 @@ def handle_register(chat_id, name, phone, blood_type, location):
     send_message(chat_id, f"[OK] Registered!\n\nName: {name}\nBlood: {blood_type}\nLocation: {location}")
 
 def handle_request_blood(chat_id, patient_name, blood_type, hospital, units, urgency, doctor_phone):
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""INSERT INTO requests 
         (user_id, patient_name, blood_type, hospital, units, urgency, doctor_phone, status, created_at)
@@ -143,7 +148,7 @@ def handle_request_blood(chat_id, patient_name, blood_type, hospital, units, urg
     send_message(chat_id, f"[OK] Request #{request_id} created!")
 
 def handle_find_donor(chat_id, blood_type):
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""SELECT name, location, phone FROM donors 
         WHERE blood_type = ? AND available = 1""", (blood_type,))
@@ -159,7 +164,7 @@ def handle_find_donor(chat_id, blood_type):
     send_message(chat_id, text)
 
 def handle_my_requests(chat_id):
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""SELECT id, patient_name, blood_type, status FROM requests 
         WHERE user_id = ? ORDER BY id DESC LIMIT 5""", (chat_id,))
@@ -499,7 +504,7 @@ HTML = """
 
 @app.route("/")
 def index():
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     
     c.execute("SELECT name, phone, blood_type, location FROM donors WHERE available = 1")
@@ -522,7 +527,7 @@ def index():
 @app.route("/api/donor", methods=["POST"])
 def add_donor():
     data = request.json
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""INSERT INTO donors (user_id, name, phone, blood_type, location, available, created_at)
         VALUES (?, ?, ?, ?, ?, 1, ?)""",
@@ -534,7 +539,7 @@ def add_donor():
 @app.route("/api/request", methods=["POST"])
 def add_request():
     data = request.json
-    conn = sqlite3.connect("damu.db")
+    conn = get_db()
     c = conn.cursor()
     c.execute("""INSERT INTO requests (user_id, patient_name, blood_type, hospital, units, urgency, doctor_phone, status, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
@@ -548,9 +553,9 @@ def add_request():
 # START
 # ============================================
 if __name__ == "__main__":
-    if BOT_TOKEN:
+    if BOT_TOKEN and not os.getenv("VERCEL"):
         threading.Thread(target=poll_updates, daemon=True).start()
-    
+
     port = int(os.getenv("PORT", 5005))
     print(f"DamuExchange Web: http://localhost:{port}")
     app.run(host="0.0.0.0", port=port)
